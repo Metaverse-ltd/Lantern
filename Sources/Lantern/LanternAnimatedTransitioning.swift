@@ -33,10 +33,14 @@ extension LanternAnimatedTransitioning {
     
     public weak var lantern: Lantern? {
         get {
-            objc_getAssociatedObject(self, &lanternKey) as? Lantern
+            if let wrapper = objc_getAssociatedObject(self, &lanternKey) as? LanternWeakAssociationWrapper {
+                return wrapper.target as? Lantern
+            }
+            return nil
         }
         set {
-            objc_setAssociatedObject(self, &lanternKey, newValue, .OBJC_ASSOCIATION_ASSIGN)
+            let wrapper = LanternWeakAssociationWrapper(target: newValue)
+            objc_setAssociatedObject(self, &lanternKey, wrapper, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
         }
     }
     
@@ -46,19 +50,21 @@ extension LanternAnimatedTransitioning {
     }
     
     public func fastSnapshot(with view: UIView) -> UIView? {
-        UIGraphicsBeginImageContextWithOptions(view.bounds.size, false, UIScreen.main.scale)
-        view.drawHierarchy(in: view.bounds, afterScreenUpdates: false)
-        let image = UIGraphicsGetImageFromCurrentImageContext()
-        UIGraphicsEndImageContext()
-        return UIImageView(image: image)
+        let snapshot = view.snapshotView(afterScreenUpdates: true)
+        return snapshot
     }
     
     public func snapshot(with view: UIView) -> UIView? {
-        UIGraphicsBeginImageContextWithOptions(view.bounds.size, false, UIScreen.main.scale)
-        guard let context = UIGraphicsGetCurrentContext() else { return nil }
-        view.layer.render(in: context)
-        let image = UIGraphicsGetImageFromCurrentImageContext()
-        UIGraphicsEndImageContext()
-        return UIImageView(image: image)
+        let snapshot = view.snapshotView(afterScreenUpdates: true)
+        return snapshot
+    }
+}
+
+struct LanternWeakAssociationWrapper {
+    
+    weak var target: AnyObject?
+    
+    init(target: AnyObject? = nil) {
+        self.target = target
     }
 }

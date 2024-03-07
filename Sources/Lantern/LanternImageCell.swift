@@ -8,6 +8,17 @@
 
 import UIKit
 
+open class LanternImageView: UIImageView {
+    
+    public var imageDidChangedHandler: (() -> ())?
+    
+    public override var image: UIImage? {
+        didSet {
+            imageDidChangedHandler?()
+        }
+    }
+}
+
 open class LanternImageCell: UIView, UIScrollViewDelegate, UIGestureRecognizerDelegate, LanternCell, LanternZoomSupportedCell {
     /// 弱引用PhotoBrowser
     open weak var lantern: Lantern?
@@ -38,10 +49,13 @@ open class LanternImageCell: UIView, UIScrollViewDelegate, UIGestureRecognizerDe
         }
     }
     
-    open lazy var imageView: UIImageView = {
-        let view = UIImageView()
+    open lazy var imageView: LanternImageView = {
+        let view = LanternImageView()
         view.backgroundColor = .black
         view.clipsToBounds = true
+        view.imageDidChangedHandler = { [weak self] in
+            self?.setNeedsLayout()
+        }
         return view
     }()
     
@@ -57,7 +71,6 @@ open class LanternImageCell: UIView, UIScrollViewDelegate, UIGestureRecognizerDe
     }()
     
     deinit {
-        imageView.removeObserver(self, forKeyPath: "image", context: nil)
         LanternLog.high("deinit - \(self.classForCoder)")
     }
     
@@ -92,11 +105,6 @@ open class LanternImageCell: UIView, UIScrollViewDelegate, UIGestureRecognizerDe
         if let view = self.contentView {
             imageView.addSubview(view)
         }
-        // 使用 kvo 监控 imageView 的 image 的变化
-        imageView.addObserver(self,
-                              forKeyPath: "image",
-                              options: [.new],
-                              context: nil)
     }
     
     open func setup() {
@@ -278,7 +286,6 @@ open class LanternImageCell: UIView, UIScrollViewDelegate, UIGestureRecognizerDe
             imageView.frame = result.frame
             refreshContentView()
             lantern?.maskView.alpha = result.scale * result.scale
-            lantern?.setStatusBar(hidden: result.scale > 0.99)
             lantern?.pageIndicator?.isHidden = result.scale < 0.99
             self.panGestureChangeAction?(self, result.scale)
         case .ended, .cancelled:
@@ -290,7 +297,6 @@ open class LanternImageCell: UIView, UIScrollViewDelegate, UIGestureRecognizerDe
                 lantern?.dismiss()
             } else {
                 lantern?.maskView.alpha = 1.0
-                lantern?.setStatusBar(hidden: true)
                 lantern?.pageIndicator?.isHidden = false
                 resetImageViewPosition()
             }
@@ -362,14 +368,5 @@ open class LanternImageCell: UIView, UIScrollViewDelegate, UIGestureRecognizerDe
     
     open var showContentView: UIView {
         return imageView
-    }
-    
-    open override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey : Any]?, context: UnsafeMutableRawPointer?) {
-        guard let imgView = object as? UIImageView, imgView == imageView, keyPath == "image" else {
-            super.observeValue(forKeyPath: keyPath, of: object, change: change, context: context)
-            return
-        }
-        // 重新布局
-        setNeedsLayout()
     }
 }

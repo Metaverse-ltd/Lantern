@@ -94,8 +94,12 @@ open class Lantern: UIViewController, UIViewControllerTransitioningDelegate, UIN
         get { browserView.cellDidAppear }
     }
     
-    /// lantern视图消失Dismiss
-    open var lanternDismiss: ((LanternCell, Int) -> Void)?
+    /// 即将dismiss
+    /// - Returns: 是否执行动画
+    open var willDismiss: ((Lantern) -> Bool)?
+    
+    /// 已经dismiss
+    open var didDismiss: ((Lantern) -> Void)?
     
     /// 主视图
     open lazy var browserView = LanternView()
@@ -127,7 +131,6 @@ open class Lantern: UIViewController, UIViewControllerTransitioningDelegate, UIN
         case .present(let fromVC, let embed):
             let toVC = embed?(self) ?? self
             toVC.modalPresentationStyle = .custom
-            toVC.modalPresentationCapturesStatusBarAppearance = true
             toVC.transitioningDelegate = self
             let from = fromVC ?? Lantern.topMost
             from?.present(toVC, animated: true, completion: nil)
@@ -196,9 +199,6 @@ open class Lantern: UIViewController, UIViewControllerTransitioningDelegate, UIN
         super.viewWillDisappear(animated)
         navigationController?.delegate = previousNavigationControllerDelegate
         hideNavigationBar(false)
-        if let cell = browserView.visibleCells[pageIndex] {
-            self.lanternDismiss?(cell, self.pageIndex)
-        }
     }
     
     open override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
@@ -227,37 +227,6 @@ open class Lantern: UIViewController, UIViewControllerTransitioningDelegate, UIN
     }
     
     //
-    // MARK: - Status Bar
-    //
-    
-    private lazy var isPreviousStatusBarHidden: Bool = {
-        var previousVC: UIViewController?
-        if let vc = self.presentingViewController {
-            previousVC = vc
-        } else {
-            if let navVCs = self.navigationController?.viewControllers, navVCs.count >= 2 {
-                previousVC = navVCs[navVCs.count - 2]
-            }
-        }
-        return previousVC?.prefersStatusBarHidden ?? false
-    }()
-    
-    private lazy var isStatusBarHidden = self.isPreviousStatusBarHidden
-    
-    open override var prefersStatusBarHidden: Bool {
-        return isStatusBarHidden
-    }
-    
-    open func setStatusBar(hidden: Bool) {
-        if hidden {
-            isStatusBarHidden = true
-        } else {
-            isStatusBarHidden = isPreviousStatusBarHidden
-        }
-        setNeedsStatusBarAppearanceUpdate()
-    }
-    
-    //
     // MARK: - 转场
     //
     
@@ -282,13 +251,18 @@ open class Lantern: UIViewController, UIViewControllerTransitioningDelegate, UIN
     
     /// 关闭PhotoBrowser
     open func dismiss() {
-        setStatusBar(hidden: false)
+        let animated = willDismiss?(self) ?? true
         pageIndicator?.removeFromSuperview()
         if presentingViewController != nil {
-            self.presentingViewController?.dismiss(animated: true, completion: nil)
+            presentingViewController?.dismiss(animated: animated) { [weak self] in
+                if let self {
+                    self.didDismiss?(self)
+                }
+            }
         } else {
             navigationController?.delegate = self
             navigationController?.popViewController(animated: true)
+            didDismiss?(self)
         }
     }
     
